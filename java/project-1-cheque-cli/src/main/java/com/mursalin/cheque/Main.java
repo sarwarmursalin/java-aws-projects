@@ -2,6 +2,10 @@ package com.mursalin.cheque;
 
 import com.mursalin.cheque.model.Cheque;
 
+import com.mursalin.cheque.fraud.FraudRules;
+import com.mursalin.cheque.validation.Validator;
+import java.util.stream.Collectors;
+import java.util.Set;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.HashMap;
@@ -20,17 +24,41 @@ public class Main {
             new Cheque("CHQ-005", "Tanson Corp",  "Bob LLC",        new BigDecimal("1200.00"), "021000021", LocalDate.of(2025, 3, 15))
         );
 
-        cheques.forEach(System.out::println);
+        Validator validator = new Validator();
+        FraudRules fraudRules = new FraudRules();
 
-        Map<String, Integer> idCount = new HashMap<>();
-        for (Cheque c : cheques) {
-            idCount.put(c.id(), idCount.getOrDefault(c.id(), 0) + 1);
-        }
+        // Build set of duplicate ids using streams
+        Set<String> duplicateIds = cheques.stream()
+                .collect(Collectors.groupingBy(Cheque::id, Collectors.counting()))
+                .entrySet().stream()
+                .filter(e -> e.getValue() > 1)
+                .map(Map.Entry::getKey)
+                .collect(Collectors.toSet());
 
-        for (Map.Entry<String, Integer> entry : idCount.entrySet()) {
-            if (entry.getValue() > 1) {
-                System.out.println("DUPLICATE: " + entry.getKey() + " appears " + entry.getValue() + " times");
-            }
-        }
+        // Partition: valid data (true) vs rejected/malformed (false)
+        Map<Boolean, List<Cheque>> byValidity = cheques.stream()
+                .collect(Collectors.partitioningBy(c -> validator.validate(c).isEmpty()));
+
+        List<Cheque> validOrFlagged = byValidity.get(true);
+        List<Cheque> rejected       = byValidity.get(false);
+
+        // Partition valid ones: clean (true) vs fraud-flagged (false)
+        Map<Boolean, List<Cheque>> byFraud = validOrFlagged.stream()
+                .collect(Collectors.partitioningBy(c -> fraudRules.check(c, duplicateIds).isEmpty()));
+
+        List<Cheque> clean   = byFraud.get(true);
+        List<Cheque> flagged = byFraud.get(false);
+
+        // Print summary
+        System.out.println("Processed " + cheques.size() + " cheques");
+        System.out.println("  V Valid:    " + clean.size());
+        System.out.println("  ! Flagged:  " + flagged.size());
+        System.out.println("  X Rejected: " + rejected.size());
+
+        System.out.println("\nFLAGGED:");
+        flagged.forEach(c -> System.out.println("  " + c.id() + " -> " + fraudRules.check(c, duplicateIds)));
+
+        System.out.println("\nREJECTED:");
+        rejected.forEach(c -> System.out.println("  " + c.id() + " -> " + validator.validate(c)));
     }
 }

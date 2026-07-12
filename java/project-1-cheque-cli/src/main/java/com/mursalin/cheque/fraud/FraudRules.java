@@ -5,6 +5,7 @@ import com.mursalin.cheque.model.Cheque;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Set;
+import java.util.ArrayList;
 
 public class FraudRules {
 
@@ -18,6 +19,24 @@ public class FraudRules {
     );
 
     public List<String> check(Cheque cheque, Set<String> seenIds) {
-        throw new UnsupportedOperationException("not yet implemented");
+        List<String> flags = new ArrayList<>();
+
+        // Rule 1: STRUCTURING — amount just under $10,000 reporting threshold
+        if (cheque.amount().compareTo(STRUCTURING_LOW) >= 0 &&
+                cheque.amount().compareTo(STRUCTURING_HIGH) <= 0) {
+            flags.add("STRUCTURING");
+        }
+
+        // Rule 2: DUPLICATE_ID — same id seen before
+        if (seenIds.contains(cheque.id())) {
+            flags.add("DUPLICATE_ID");
+        }
+
+        // Rule 3: WATCHLIST — payee is a flagged entity
+        if (WATCHLIST.contains(cheque.payee())) {
+            flags.add("WATCHLIST");
+        }
+
+        return flags;
     }
 }
