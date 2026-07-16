@@ -1,0 +1,19 @@
+[Unit]
+Description=Document API Spring Boot Service
+After=postgresql.service
+Requires=postgresql.service
+
+[Service]
+Type=simple
+User=ec2-user
+ExecStart=/usr/bin/java -jar /home/ec2-user/document-api.jar
+Environment=SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/golam
+Environment=SPRING_DATASOURCE_USERNAME=golam
+Environment=SPRING_DATASOURCE_PASSWORD=REPLACE_WITH_DB_PASSWORD
+StandardOutput=append:/var/log/document-api.log
+StandardError=append:/var/log/document-api.log
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
