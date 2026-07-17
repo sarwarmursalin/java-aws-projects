@@ -1,0 +1,4 @@
+data/
+warehouse/
+.ipynb_checkpoints/
+__pycache__/
