@@ -5,7 +5,7 @@ target/
 reports/
 .DS_Store
 
-README.md
+/README.md
 java/LEARNING-RESOURCES.md
 aws/course.md
 interview-prep/
