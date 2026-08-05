@@ -4,3 +4,4 @@
 terraform.tfvars
 .terraform.lock.hcl
 backend.zip
+ingest-lambda.zip

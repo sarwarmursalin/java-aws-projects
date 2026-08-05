@@ -18,6 +18,18 @@ resource "aws_iam_role" "app" {
 
 # Lets you connect via SSM Session Manager for debugging, with no SSH key
 # pairs and no port 22 open on the security group.
+#
+# Tried scoping this down to a custom policy with just the documented
+# Session Manager actions (ssmmessages:*, ec2messages:*,
+# ssm:UpdateInstanceInformation) instead of this managed policy. It broke
+# SSM Agent registration entirely — a fresh instance under that policy
+# never showed up in `aws ssm describe-instance-information` even after
+# several minutes, so the agent needs more than the publicly documented
+# minimum to complete its registration/heartbeat cycle. AWS doesn't
+# document that full internal requirement, and guessing further against
+# undocumented agent behavior isn't a good trade for the security upside
+# on a personal project — reverted to the managed policy, which is what
+# AWS itself recommends for this reason.
 resource "aws_iam_role_policy_attachment" "ssm" {
   role       = aws_iam_role.app.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"

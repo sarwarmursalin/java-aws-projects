@@ -1,10 +1,15 @@
+# Explicitly the "minimal" variant, not just whatever "al2023-ami-*"
+# happens to match most recently — that pattern matches both the minimal
+# and standard AMI names, so most_recent silently picks whichever AWS
+# published last. Minimal doesn't come with SSM Agent preinstalled
+# (unlike standard), so user_data.sh.tpl installs it explicitly.
 data "aws_ami" "al2023" {
   most_recent = true
   owners      = ["amazon"]
 
   filter {
     name   = "name"
-    values = ["al2023-ami-*-x86_64"]
+    values = ["al2023-ami-minimal-*-x86_64"]
   }
 }
 
@@ -53,6 +58,18 @@ resource "aws_launch_template" "app" {
     name = aws_iam_instance_profile.app.name
   }
 
+  # The minimal AMI's default root volume is too small once Node.js, the
+  # app's node_modules, and the CloudWatch Agent package (~69MB download,
+  # ~578MB installed with its deps) are all on it — dnf failed with
+  # "needs 127MB more space on the / filesystem" until this was added.
+  block_device_mappings {
+    device_name = "/dev/xvda"
+    ebs {
+      volume_size = 20
+      volume_type = "gp3"
+    }
+  }
+
   network_interfaces {
     associate_public_ip_address = true
     security_groups             = [aws_security_group.app.id]
@@ -66,6 +83,7 @@ resource "aws_launch_template" "app" {
     s3_key         = "backend.zip"
     db_host        = aws_db_instance.main.address
     frontend_origin = "https://${aws_cloudfront_distribution.frontend.domain_name}"
+    log_group_name = aws_cloudwatch_log_group.app.name
   }))
 
   tag_specifications {

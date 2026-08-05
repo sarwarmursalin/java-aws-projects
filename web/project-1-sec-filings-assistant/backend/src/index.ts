@@ -32,6 +32,19 @@ interface ChatResponse {
   conversationId: string;
 }
 
+// Claude Sonnet pricing, per million tokens — check against Anthropic's
+// current published rates if these drift, this isn't read from a live
+// pricing API.
+const INPUT_COST_PER_MILLION_USD = 3;
+const OUTPUT_COST_PER_MILLION_USD = 15;
+
+function estimatedCostUsd(inputTokens: number, outputTokens: number): number {
+  return (
+    (inputTokens / 1_000_000) * INPUT_COST_PER_MILLION_USD +
+    (outputTokens / 1_000_000) * OUTPUT_COST_PER_MILLION_USD
+  );
+}
+
 app.get("/health", (_req: Request, res: Response) => {
   res.json({ status: "ok" });
 });
@@ -49,8 +62,24 @@ app.post("/chat", async (req: Request<{}, {}, ChatRequest>, res: Response<ChatRe
     const priorMessages = await loadMessages(convId);
 
     await saveMessage(convId, "user", message);
-    const reply = await runAgent(priorMessages, message);
+    const { reply, latencyMs, inputTokens, outputTokens } = await runAgent(priorMessages, message);
     await saveMessage(convId, "assistant", reply);
+
+    // One structured JSON line per request. systemd appends this to
+    // /var/log/sec-filings-assistant.log; the CloudWatch Agent ships that
+    // file up, and a log metric filter turns these fields into real
+    // CloudWatch metrics (infra/cloudwatch.tf) — this line never being on
+    // the request's success/failure path is intentional, a logging issue
+    // should never be able to break a chat response.
+    console.log(
+      JSON.stringify({
+        metric: "llm_request",
+        latencyMs,
+        inputTokens,
+        outputTokens,
+        estimatedCostUsd: estimatedCostUsd(inputTokens, outputTokens),
+      })
+    );
 
     res.json({ reply, conversationId: convId });
   } catch (err) {

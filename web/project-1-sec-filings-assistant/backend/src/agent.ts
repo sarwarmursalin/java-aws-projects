@@ -34,10 +34,17 @@ interface HistoryMessage {
   content: string;
 }
 
+export interface AgentResult {
+  reply: string;
+  latencyMs: number;
+  inputTokens: number;
+  outputTokens: number;
+}
+
 export async function runAgent(
   priorMessages: HistoryMessage[],
   userMessage: string
-): Promise<string> {
+): Promise<AgentResult> {
   // Typed explicitly (rather than left to be inferred from the array
   // literal) — inferring it produced a tuple type that TypeScript matched
   // against the wrong arm of LangChain's message union, requiring a `type`
@@ -48,10 +55,29 @@ export async function runAgent(
     { role: "user", content: userMessage },
   ];
 
+  const startedAt = Date.now();
   const result = await agent.invoke({ messages });
+  const latencyMs = Date.now() - startedAt;
+
+  // The react loop can call the model more than once per request (e.g. a
+  // tool call, then a follow-up response using the tool's result) — sum
+  // usage across every AI message, not just the last one, for an accurate
+  // per-request total.
+  let inputTokens = 0;
+  let outputTokens = 0;
+  for (const message of result.messages) {
+    const usage = (message as { usage_metadata?: { input_tokens?: number; output_tokens?: number } })
+      .usage_metadata;
+    if (usage) {
+      inputTokens += usage.input_tokens ?? 0;
+      outputTokens += usage.output_tokens ?? 0;
+    }
+  }
 
   const lastMessage = result.messages[result.messages.length - 1];
-  return typeof lastMessage.content === "string"
+  const reply = typeof lastMessage.content === "string"
     ? lastMessage.content
     : JSON.stringify(lastMessage.content);
+
+  return { reply, latencyMs, inputTokens, outputTokens };
 }

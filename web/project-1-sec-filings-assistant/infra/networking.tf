@@ -97,6 +97,14 @@ resource "aws_security_group" "rds" {
     cidr_blocks = [var.my_ip]
   }
 
+  ingress {
+    description     = "Postgres from the ingestion Lambda"
+    from_port        = 5432
+    to_port          = 5432
+    protocol         = "tcp"
+    security_groups  = [aws_security_group.lambda.id]
+  }
+
   egress {
     from_port   = 0
     to_port     = 0

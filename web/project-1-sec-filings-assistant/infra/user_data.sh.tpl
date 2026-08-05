@@ -1,7 +1,8 @@
 #!/bin/bash
 set -e
 
-dnf install -y nodejs unzip jq awscli
+dnf install -y nodejs unzip jq awscli amazon-ssm-agent amazon-cloudwatch-agent
+systemctl enable --now amazon-ssm-agent
 
 REGION="${region}"
 DB_SECRET_ID="${db_secret_id}"
@@ -10,6 +11,7 @@ S3_BUCKET="${s3_bucket}"
 S3_KEY="${s3_key}"
 DB_HOST="${db_host}"
 FRONTEND_ORIGIN="${frontend_origin}"
+LOG_GROUP_NAME="${log_group_name}"
 
 DB_SECRET_JSON=$(aws secretsmanager get-secret-value --secret-id "$DB_SECRET_ID" --region "$REGION" --query SecretString --output text)
 DB_USER=$(echo "$DB_SECRET_JSON" | jq -r .username)
@@ -57,3 +59,28 @@ UNIT
 systemctl daemon-reload
 systemctl enable sec-filings-assistant
 systemctl start sec-filings-assistant
+
+# Ships the app's log file to CloudWatch Logs — started after the app
+# itself so the log file already exists by the time the agent looks for it.
+mkdir -p /opt/aws/amazon-cloudwatch-agent/etc
+cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<CWCONFIG
+{
+  "logs": {
+    "logs_collected": {
+      "files": {
+        "collect_list": [
+          {
+            "file_path": "/var/log/sec-filings-assistant.log",
+            "log_group_name": "$LOG_GROUP_NAME",
+            "log_stream_name": "{instance_id}"
+          }
+        ]
+      }
+    }
+  }
+}
+CWCONFIG
+
+/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+  -a fetch-config -m ec2 -s \
+  -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
