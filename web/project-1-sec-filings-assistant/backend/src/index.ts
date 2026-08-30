@@ -32,7 +32,7 @@ interface ChatRequest {
 
 interface ChatResponse {
   reply: string;
-  conversationId: string;
+  conversationId: string | null;
 }
 
 // Claude Sonnet pricing, per million tokens — check against Anthropic's
@@ -56,7 +56,7 @@ app.post("/chat", async (req: Request<{}, {}, ChatRequest>, res: Response<ChatRe
   const { message, conversationId } = req.body;
 
   if (!message) {
-    res.status(400).json({ reply: "Missing 'message' in request body", conversationId: "" });
+    res.status(400).json({ reply: "Missing 'message' in request body", conversationId: null });
     return;
   }
 
