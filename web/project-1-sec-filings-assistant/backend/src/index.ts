@@ -6,12 +6,15 @@ import { runAgent } from "./agent.js";
 import { createConversation, loadMessages, saveMessage } from "./conversations.js";
 
 const app = express();
-const PORT = 3001;
+// Render (and most PaaS hosts) assign the port at runtime and inject it as
+// PORT — the app has to listen on whatever they hand it, not a fixed port.
+const PORT = process.env.PORT ?? 3001;
 
 // Allows the React dev server (a different origin: localhost:5173) to call
 // this API. Without this, the browser blocks the response before your
 // frontend code ever sees it, even though the request reaches the server fine.
-// FRONTEND_ORIGIN is set in the deployed environment to the CloudFront domain.
+// FRONTEND_ORIGIN is set in the deployed environment to the frontend's real URL
+// (CloudFront domain on AWS, the Vercel domain for the free demo deployment).
 const corsOrigins = ["http://localhost:5173"];
 if (process.env.FRONTEND_ORIGIN) {
   corsOrigins.push(process.env.FRONTEND_ORIGIN);
@@ -84,7 +87,10 @@ app.post("/chat", async (req: Request<{}, {}, ChatRequest>, res: Response<ChatRe
     res.json({ reply, conversationId: convId });
   } catch (err) {
     console.error("Agent error:", err);
-    res.status(500).json({ reply: "Something went wrong talking to the agent.", conversationId: conversationId ?? "" });
+    // Must stay null, not "" — the frontend doesn't check response.ok before
+    // reading this body, so an empty string here gets stored as the active
+    // conversationId and poisons every retry with an invalid UUID lookup.
+    res.status(500).json({ reply: "Something went wrong talking to the agent.", conversationId: conversationId ?? null });
   }
 });
 
